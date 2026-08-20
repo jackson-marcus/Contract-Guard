@@ -1,0 +1,18 @@
+# Pipeline configuration. Paths relative to the repo root.
+
+data:
+  processed_dir: data/processed
+  n_contracts: 40
+  seed: 42
+
+risk:
+  # Patterns marked here drive severity; see risk/rules.py for the library.
+  flag_missing_clauses: [limitation_of_liability, termination, confidentiality]
+
+rag:
+  top_k: 4
+  rrf_k: 60
+  max_answer_tokens: 700
+
+eval:
+  experiment_name: contractguard

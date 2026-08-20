@@ -1,0 +1,19 @@
+services:
+  api:
+    build: .
+    env_file: .env
+    ports:
+      - "8160:8000"
+    volumes:
+      - ./data:/app/data
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    environment:
+      CONTRACTGUARD_API_URL: http://api:8000
+    ports:
+      - "8661:8501"
+    depends_on:
+      - api

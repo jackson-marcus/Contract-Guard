@@ -1,80 +1,229 @@
-# ContractGuard — Legal Contract Intelligence & Clause AST Analysis <div align="center"> [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
-[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
-[![Tests: Pytest](https://img.shields.io/badge/tests-pytest-blue.svg?logo=pytest&logoColor=white)](https://pytest.org/) </div> > **Automated legal contract analysis and compliance audit powered by an Abstract Syntax Tree (AST) Visitor Architecture — decouples clause hierarchy representation from independent analytical passes (risk auditing, obligation extraction, regulatory compliance).** --- ## 🏛️ Architecture Pattern **AST Visitor Architecture (Double-Dispatch Tree Traversal)** Legal agreements are structured hierarchical documents consisting of articles, sections, covenants, indemnities, and termination terms. Evaluating a contract requires multiple independent analyses:
-> **Note:** This is a portfolio project demonstrating software engineering patterns and ML concepts. Not intended for production use without further hardening. 1. **Risk Detection:** Uncapped liabilities, unilateral termination, automatic renewal traps.
-2. **Obligation Extraction:** Covenants, affirmative duties, deliverables, and numerical deadlines.
-3. **Regulatory Compliance:** GDPR data processing clauses, CCPA opt-outs, SOX audit trails. Embedding all of these rules directly into document parser classes creates massive, tightly coupled code where updating a legal rule risks breaking document tokenization. The **AST Visitor Pattern** decouples the contract document structure (`ContractAST`, `ClauseNode`) from analytical operations (`ClauseVisitor` implementations). New compliance checks, risk rules, or extraction passes can be created simply by writing a new visitor without modifying the underlying AST. ```mermaid
-classDiagram class ContractAST { +str title +list[ClauseNode] clauses +accept(visitor: ClauseVisitor) list } class ClauseNode { +int index +str heading +str text +str clause_type +list obligations +accept(visitor: ClauseVisitor) Any } class ClauseVisitor { <<interface>> +visit(node: ClauseNode)* Any } class RiskDetectionVisitor { +visit(node: ClauseNode) list[RiskFlag] } class ObligationVisitor { +visit(node: ClauseNode) list[ObligationRecord] } class ComplianceVisitor { +visit(node: ClauseNode) list[ComplianceResult] } ContractAST *-- ClauseNode : contains ClauseNode ..> ClauseVisitor : calls visit() ClauseVisitor <|-- RiskDetectionVisitor : implements ClauseVisitor <|-- ObligationVisitor : implements ClauseVisitor <|-- ComplianceVisitor : implements
-``` ### Double-Dispatch Sequence ```
-Caller ──► ContractAST.accept(visitor) │ ├── ClauseNode[0].accept(visitor) ──► visitor.visit(ClauseNode[0]) ──► RiskFlag[] ├── ClauseNode[1].accept(visitor) ──► visitor.visit(ClauseNode[1]) ──► RiskFlag[] └── ClauseNode[N].accept(visitor) ──► visitor.visit(ClauseNode[N]) ──► RiskFlag[]
-``` --- ## 🔍 Concrete Visitors & Audit Passes | Visitor | Target Domain | Extraction Output | Severity Model |
-|---|---|---|---|
-| `RiskDetectionVisitor` | High-risk contractual language & hostile terms | `RiskFlag` (category, matched phrase, severity) | `HIGH` (uncapped liability, unilateral termination) / `MEDIUM` (auto-renewal trap, non-compete) |
-| `ObligationVisitor` | Actionable covenants & deadlines | `ObligationRecord` (party, action, deadline_days) | Structured temporal ledger |
-| `ComplianceVisitor` | Regulatory frameworks (GDPR, CCPA, SOX) | `ComplianceResult` (requirement, satisfied, evidence) | Binary audit assertion + verbatim quote | ### Dynamic Open-Closed Extensibility Adding a bespoke clause extractor (e.g., ESG / Environmental warranties) requires zero changes to core document parsing: ```python
-from contractguard.ast import ClauseNode, ClauseVisitor class ESGComplianceVisitor(ClauseVisitor): def visit(self, node: ClauseNode) -> list[str]: if "carbon offset" in node.text.lower() or "net zero" in node.text.lower(): return [f"Clause {node.index}: ESG commitment identified"] return [] # Execute across any contract AST
-esg_findings = contract_ast.accept(ESGComplianceVisitor())
-``` --- ## 📐 Formal Representation & Processing Pipeline ### 1. Document Segmentation $\to$ AST Compilation
-Raw legal texts are segmented across heading boundaries $\mathcal{H}$ into discrete lexical blocks:
-$$\mathcal{D} = \bigcup_{i=1}^N \mathcal{C}_i, \quad \mathcal{C}_i = \langle \text{index}_i, \text{heading}_i, \text{body}_i, \text{typology}_i \rangle$$ The compilation pass maps raw clause dictionaries into an immutable `ContractAST` structure with verified schema typing. ### 2. Multi-Pass Visitor Execution
-Given a set of active audit visitors $\mathcal{V} = \{V_{\text{risk}}, V_{\text{obl}}, V_{\text{comp}}\}$, the aggregate evaluation is a composite map:
-$$\Phi(\mathcal{D}) = \bigoplus_{V \in \mathcal{V}} \left( \bigcup_{\mathcal{C} \in \mathcal{D}} V(\mathcal{C}) \right)$$ --- ## 🚀 Quick Start & Usage ```bash
-# Setup environment and run test suite
-uv sync
-uv run pytest # Launch FastAPI service & Streamlit UI
-uv run uvicorn contractguard.api.routes:app --reload --port 8000
-``` ### Programmatic AST Evaluation ```python
-from contractguard.ast import ( build_ast, RiskDetectionVisitor, ObligationVisitor, ComplianceVisitor,
-)
-from contractguard.clauses.segment import segment raw_text = """
-1. TERMINATION
-Either party may terminate at any time without cause and without notice. 2. PAYMENT TERMS
-Client shall submit invoices within 30 days of service delivery. 3. DATA PROCESSING
-This agreement constitutes a data processing agreement under GDPR.
-""" # 1. Parse and build AST
-clauses = segment(raw_text)
-ast = build_ast("Master Services Agreement", clauses) # 2. Execute Risk Visitor
-risk_visitor = RiskDetectionVisitor()
-risk_findings = ast.accept(risk_visitor)
-# -> [RiskFlag(category='unilateral_termination', severity='high', ...)] # 3. Execute Obligation Visitor
-obl_visitor = ObligationVisitor()
-obligations = ast.accept(obl_visitor)
-# -> [ObligationRecord(party='Client', action='submit invoices', deadline_days=30)] # 4. Execute Regulatory Compliance Visitor
-comp_visitor = ComplianceVisitor(requirements=["GDPR_data_processing"])
-compliance = ast.accept(comp_visitor)
-# -> [ComplianceResult(requirement='GDPR_data_processing', satisfied=True, ...)]
-``` --- ## 📊 Benchmark & Performance Metrics | Evaluation Dimension | Metric | Benchmark Score |
+<div align="center">
+
+<img src="docs/brand/banner.svg" alt="ContractGuard — Legal Contract Intelligence & Clause AST Analysis" width="720">
+
+</div>
+
+# ContractGuard — Legal Contract Intelligence & Clause AST Analysis
+
+**Read a contract the way a reviewer does — clause by clause.** ContractGuard segments a pasted agreement into typed clauses, flags risky language with a severity and a plain-English reason, extracts who-owes-what-by-when obligations, and answers questions across a clause library with citations. Its analysis layer is built on the **Visitor pattern**: every new check (risk, obligation, compliance) is a small class that walks a clause tree without touching the parser.
+
+<div align="center">
+
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Tests: pytest](https://img.shields.io/badge/tests-pytest-0A9EDC.svg?logo=pytest&logoColor=white)](https://pytest.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
+
+</div>
+
+> **Portfolio project.** Built to demonstrate the Visitor pattern, a small pattern-based NLP pipeline, and hybrid-retrieval RAG on synthetic contract data. It is reviewer assistance, **not legal advice**, and is not hardened for production use.
+
+---
+
+## The problem
+
+Contract review is repetitive pattern-spotting. A reviewer skims for the same handful of traps — uncapped liability, one-sided termination, an auto-renewal with a five-day opt-out window, a blanket IP assignment — then checks that the boilerplate everyone forgets (a liability cap, a confidentiality clause) is actually present. Doing this by hand across a stack of agreements is slow and easy to get wrong.
+
+ContractGuard automates the first pass: it turns raw contract text into structured clauses, runs a library of risk rules and compliance checks over them, pulls out dated obligations, and lets you ask natural-language questions over a whole corpus of contracts with clause-level citations.
+
+## What it does
+
+- **Segments** a contract into clauses on numbered/ALL-CAPS headings and classifies each by keyword profile (payment, termination, indemnification, IP, ...).
+- **Flags risk** with a regex pattern library — each finding carries a severity (`high`/`medium`/`low`), the triggering excerpt, and a reviewer-actionable explanation. Also flags *missing* expected clauses.
+- **Extracts obligations** of the form "*&lt;party&gt; shall &lt;action&gt; within N days*" into structured records with deadlines.
+- **Answers questions** over a clause corpus using hybrid retrieval + a swappable LLM, returning `[contract-N clause-M]` citations.
+
+## How it works
+
+A contract flows through one segmentation step, then fans out into independent analysis passes and an optional RAG index. Nothing downstream re-parses the text.
+
+```mermaid
+flowchart TD
+    T["Raw contract text"] --> S["segment()<br/>headings → typed Clause list"]
+    S --> R["Risk rules (scan)<br/>pattern library + missing-clause checks"]
+    S --> O["Obligation extraction<br/>party · action · deadline_days"]
+    S --> V["Clause AST + Visitors<br/>risk / obligation / compliance"]
+    S --> IDX["RAG index<br/>dense + BM25"]
+    IDX --> A["ask()<br/>retrieve → LLM → cited answer"]
+    R --> API["FastAPI"]
+    O --> API
+    A --> API
+    API --> UI["Streamlit workspace"]
+```
+
+The HTTP `/review` endpoint serves the `segment → scan` pipeline; `/ask` serves the RAG path. The **clause AST and its Visitors** are an independent, importable analysis layer (see below) demonstrated and tested in isolation.
+
+## The Visitor pattern: extensible clause analysis
+
+Evaluating a contract means running several *unrelated* analyses over the same structure — risk detection, obligation extraction, regulatory compliance. Baking every rule into the parser produces tightly coupled code where changing a legal rule risks breaking tokenisation. ContractGuard instead parses clauses into a typed AST (`ContractAST` → `ClauseNode`) and expresses each analysis as a `ClauseVisitor`. Adding a new pass means writing one class; the AST nodes never change (open–closed).
+
+```mermaid
+classDiagram
+    class ContractAST {
+        +str title
+        +list~ClauseNode~ clauses
+        +accept(visitor) list
+    }
+    class ClauseNode {
+        +int index
+        +str heading
+        +str text
+        +str clause_type
+        +list obligations
+        +accept(visitor) Any
+    }
+    class ClauseVisitor {
+        <<abstract>>
+        +visit(node) Any
+    }
+    class RiskDetectionVisitor {
+        +visit(node) list~RiskFlag~
+    }
+    class ObligationVisitor {
+        +visit(node) list~ObligationRecord~
+    }
+    class ComplianceVisitor {
+        +visit(node) list~ComplianceResult~
+    }
+    ContractAST o-- ClauseNode : contains
+    ClauseNode ..> ClauseVisitor : accept() calls visit()
+    ClauseVisitor <|-- RiskDetectionVisitor
+    ClauseVisitor <|-- ObligationVisitor
+    ClauseVisitor <|-- ComplianceVisitor
+```
+
+`ContractAST.accept(visitor)` walks each `ClauseNode`, which double-dispatches back into `visitor.visit(node)`, and collects the non-empty results.
+
+| Visitor | Looks for | Emits |
 |---|---|---|
-| **Clause Boundary Segmentation** | Boundary F1 Score | 0.942 |
-| **Typology Classification** | Micro F1 (10 Classes) | 0.918 |
-| **High-Risk Clause Identification** | Precision / Recall | 0.960 / 0.925 |
-| **Temporal Obligation Extraction** | Exact Match Deadline | 0.934 |
-| **AST Tree Traversal Throughput** | 100-page contract traversal | [measured on your hardware] (in-memory) | --- ## 🗂️ Module Organization ```
-contractguard/
-├── src/contractguard/
-│ ├── ast/ ← 🏛️ AST & Visitor Pattern Architecture
-│ │ ├── visitors.py │ ClauseNode, ContractAST, ClauseVisitor ABC,
-│ │ │ │ RiskDetectionVisitor, ObligationVisitor,
-│ │ │ │ ComplianceVisitor, build_ast()
-│ │ └── __init__.py
-│ ├── clauses/ ← 📜 Segmentation & keyword classification
-│ │ └── segment.py │ segment(), classify(), extract_obligations()
-│ ├── risk/ ← ⚖️ Risk scoring heuristics
-│ ├── rag/ ← 🔍 Standard clause library retrieval
-│ ├── api/ ← 🌐 FastAPI endpoints (/review, /health)
-│ ├── ui/ ← 🖥️ Streamlit interactive legal audit workspace
-│ └── settings.py
-├── tests/
-│ ├── test_ast_visitors.py ← AST Visitor pattern unit & integration tests
-│ ├── test_review.py ← End-to-end review tests
-│ └── conftest.py
-├── docker-compose.yml
-└── pyproject.toml
-``` --- ## 👨‍💻 Author & Maintainer <div align="center"> ### **Jackson Marcus**
-**Senior AI & Machine Learning Engineer**
-*Building ML Systems, Agentic Architectures & Scalable Data Pipelines* [![GitHub Profile](https://img.shields.io/badge/GitHub-jackson--marcus-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/jackson-marcus)
-[![Upwork Portfolio](https://img.shields.io/badge/Upwork-Top%20Rated%20Plus-14A800?style=for-the-badge&logo=upwork&logoColor=white)](https://www.upwork.com/freelancers/~012235717501ad9c7b)
-[![Email Contact](https://img.shields.io/badge/Email-wajahatanees41%40gmail.com-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:wajahatanees41@gmail.com) 📍 *Byron, GA, USA* </div>
+| `RiskDetectionVisitor` | High-risk phrasing (uncapped liability, unilateral termination, auto-renewal traps, broad IP assignment, penalties, non-competes) | `RiskFlag(clause_index, risk_category, matched_phrase, severity)` |
+| `ObligationVisitor` | Pre-extracted clause obligations | `ObligationRecord(party, action, deadline_days)` |
+| `ComplianceVisitor` | GDPR / CCPA / SOX / breach-notification indicators | `ComplianceResult(requirement, satisfied, evidence)` |
+
+Adding, say, an ESG-warranty extractor requires no change to the parser or the other visitors:
+
+```python
+from contractguard.ast import ClauseNode, ClauseVisitor, build_ast
+
+class ESGVisitor(ClauseVisitor):
+    def visit(self, node: ClauseNode):
+        t = node.text.lower()
+        if "carbon offset" in t or "net zero" in t:
+            return f"Clause {node.index}: ESG commitment identified"
+        return None  # None results are skipped
+
+ast = build_ast("Master Services Agreement", clauses)
+findings = ast.accept(ESGVisitor())
+```
+
+## Methodology
+
+**Segmentation.** Clauses are split on a heading regex (`^\d+\.`, `ARTICLE`, or a long ALL-CAPS line). Each clause is typed by counting keyword hits per category and taking the argmax; obligations are pulled with a `(party) shall (action) [within N days]` pattern.
+
+**Risk rules.** `risk/rules.py` holds a small library of `(rule_id, severity, regex, explanation)` tuples compiled with `IGNORECASE | DOTALL` so patterns span line breaks. After pattern matching, the scanner cross-checks a configurable list of required clause types (`flag_missing_clauses` in `configs/config.yaml`) and raises a `missing_*` finding for any that are absent. Findings are sorted high → low severity.
+
+**Hybrid-retrieval RAG.** The clause corpus is indexed two ways — dense embeddings (`fastembed`, MiniLM-L6-v2, cosine) and lexical BM25 (`rank_bm25`) — and the two rankings are combined with Reciprocal Rank Fusion:
+
+$$\text{RRF}(d) = \sum_{r \in \{\text{dense},\,\text{bm25}\}} \frac{1}{k + \text{rank}_r(d)}, \qquad k = 60$$
+
+The top-`k` fused clauses become the LLM context, and the answer cites each source as `[contract-N clause-M]`.
+
+**Swappable LLM.** `llm/base.py` defines a two-method `LLMProvider` protocol (`complete`, `stream`). `get_provider()` selects `ollama` (default), `claude`, or `fake` from the `LLM_PROVIDER` env var — no calling code changes. `FakeProvider` is deterministic for offline tests.
+
+## Getting started
+
+```bash
+make install        # uv sync --group dev
+make test           # uv run pytest --cov
+
+python scripts/make_contracts.py   # generate the synthetic corpus (needed for /corpus and /ask)
+
+make api            # FastAPI on http://localhost:8160
+make ui             # Streamlit workspace on http://localhost:8661
+```
+
+`make ui` points the app at the API via `CONTRACTGUARD_API_URL=http://localhost:8160`. The `/ask` and `/corpus` endpoints need the generated corpus; `/review` works on any pasted text without it. Configure the LLM with `LLM_PROVIDER` (and `ANTHROPIC_API_KEY` for Claude, or a running Ollama for `ollama`).
+
+Or with Docker:
+
+```bash
+make docker-up      # docker compose up --build -d
+make docker-down
+```
+
+## API
+
+| Method | Route | Purpose |
+|---|---|---|
+| `GET`  | `/health` | Liveness check |
+| `POST` | `/review` | Segment pasted contract text and return clauses, obligations, and risk findings |
+| `GET`  | `/corpus` | Per-contract summary over the synthetic corpus (planted risks vs. findings) |
+| `POST` | `/ask`    | Ask a question over the clause corpus; returns a cited answer (`provider` selectable) |
+
+```bash
+curl -X POST localhost:8160/review -H 'content-type: application/json' \
+  -d '{"text": "SERVICES AGREEMENT\n\n9. LIABILITY\nVendor'\''s liability shall not be capped or limited in any respect."}'
+```
+
+## Evaluation
+
+The corpus generator (`scripts/make_contracts.py`) builds synthetic Services Agreements and records, per contract, the exact set of risky clauses it planted (`planted_risks`). This gives a **known ground truth**: the `/corpus` endpoint reports planted risks against the number of findings the scanner actually raises, so you can inspect where the rule library agrees with or misses the plant. The test suite additionally asserts that a fixture contract's planted risks (`unlimited_liability`, `unilateral_termination`, `auto_renewal_trap`) are all detected.
+
+To reproduce, regenerate the corpus and compare:
+
+```bash
+python scripts/make_contracts.py
+make api
+curl localhost:8160/corpus        # planted_risks vs. n_findings per contract
+```
+
+No aggregate accuracy numbers are quoted here — they depend entirely on the generated dataset and seed (`configs/config.yaml`). Everything above the pattern library is rules and retrieval, so results are deterministic for a given corpus.
+
+## Testing
+
+```bash
+make test           # uv run pytest --cov
+```
+
+- `test_review.py` — segmentation, obligation/deadline extraction, planted-risk detection, and the FastAPI `/review` contract.
+- `test_ast_visitors.py` — the AST Visitor layer: node dispatch, each concrete visitor, and `build_ast`.
+
+## Limitations
+
+- Detection is **pattern-based**, not semantic — reworded risky clauses that dodge the regex/keyword library are missed, and unusual phrasings can produce false positives.
+- Segmentation assumes conventional numbered/ALL-CAPS headings; free-form or scanned contracts segment poorly (the fallback treats the whole document as one clause).
+- Obligation extraction only recognises a fixed set of party names and the "shall ... within N days" shape.
+- The bundled corpus is **synthetic**; thresholds, keyword lists, and required-clause sets would need tuning on real agreements.
+- RAG answer quality depends on the selected LLM provider; the default `ollama` requires a local model.
+
+## Project structure
+
+```
+src/contractguard/
+├── clauses/     # segment(): headings → typed clauses + obligation extraction
+├── risk/        # regex risk-rule library + missing-clause checks (scan)
+├── ast/         # ContractAST + ClauseVisitor pattern (risk/obligation/compliance)
+├── rag/         # hybrid (dense + BM25, RRF) retrieval and cited Q&A
+├── llm/         # LLMProvider protocol + claude / ollama / fake providers
+├── api/         # FastAPI app (main:app) and routes
+├── ui/          # Streamlit review workspace
+└── settings.py  # env + configs/config.yaml loading
+scripts/
+└── make_contracts.py   # synthetic corpus with recorded planted risks
+```
+
+## License
+
+MIT
+
+---
+
+<div align="center">
+
+**Jackson Marcus** · Senior AI & Machine Learning Engineer
+
+[![GitHub](https://img.shields.io/badge/GitHub-jackson--marcus-181717?logo=github&logoColor=white)](https://github.com/jackson-marcus)
+[![Email](https://img.shields.io/badge/Email-contact-D14836?logo=gmail&logoColor=white)](mailto:wajahatanees41@gmail.com)
+
+</div>

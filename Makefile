@@ -1,4 +1,4 @@
-.PHONY: install lint format test api ui mlflow docker-up docker-down
+.PHONY: install lint format test bench api ui mlflow docker-up docker-down
 
 install:
 	uv sync --group dev
@@ -13,6 +13,10 @@ format:
 
 test:
 	uv run pytest --cov
+
+bench:
+	uv run python scripts/make_contracts.py
+	uv run python scripts/redline_bench.py
 
 api:
 	uv run uvicorn contractguard.api.main:app --reload --port 8160

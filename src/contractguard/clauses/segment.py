@@ -41,7 +41,9 @@ class Clause:
     obligations: list[dict] = field(default_factory=list)
 
     def as_dict(self) -> dict:
-        return vars(self)
+        # dict(vars(...)) not vars(...): vars() hands back the live __dict__,
+        # so a caller mutating the "serialised" clause was editing the Clause.
+        return dict(vars(self))
 
 
 def segment(contract_text: str) -> list[Clause]:
@@ -58,18 +60,37 @@ def segment(contract_text: str) -> list[Clause]:
             clauses.append(Clause(i, heading_line[:80], block))
 
     for clause in clauses:
-        clause.clause_type = classify(clause.text)
+        clause.clause_type = classify(clause.text, clause.heading)
         clause.obligations = extract_obligations(clause.text)
     return clauses
 
 
-def classify(text: str) -> str:
-    lowered = text.lower()
-    best, best_hits = "other", 0
+# A keyword in the heading is worth more than the same word in the body: a
+# heading is the drafter declaring what the clause IS, while the body routinely
+# mentions neighbouring concepts in passing.
+HEADING_WEIGHT = 3
+
+
+def classify(text: str, heading: str | None = None) -> str:
+    """Type a clause by weighted keyword profile, heading first.
+
+    Body-only scoring ties constantly, and the old implementation broke those
+    ties by CLAUSE_TYPES declaration order: a clause headed CONFIDENTIALITY that
+    said "survives three years after termination" scored 1-1 and came back as
+    `termination`, which both hid it from the missing-confidentiality check and
+    made the document look like it had a termination clause when it did not.
+    """
+    body = text.lower()
+    head = (
+        heading if heading is not None else text.splitlines()[0] if text.strip() else ""
+    ).lower()
+    best, best_score = "other", 0
     for ctype, keywords in CLAUSE_TYPES.items():
-        hits = sum(1 for kw in keywords if kw in lowered)
-        if hits > best_hits:
-            best, best_hits = ctype, hits
+        score = sum(
+            HEADING_WEIGHT if kw in head else 1 for kw in keywords if kw in body or kw in head
+        )
+        if score > best_score:
+            best, best_score = ctype, score
     return best
 
 

@@ -16,8 +16,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any
-
+from typing import Any, ClassVar
 
 # ---------------------------------------------------------------------------
 # AST Node Hierarchy
@@ -121,7 +120,7 @@ class RiskFlag:
 class RiskDetectionVisitor(ClauseVisitor):
     """Traverses clause nodes and flags high-risk language patterns."""
 
-    _SEVERITY: dict[str, str] = {
+    _SEVERITY: ClassVar[dict[str, str]] = {
         "uncapped_liability": "high",
         "unilateral_termination": "high",
         "auto_renewal_trap": "medium",

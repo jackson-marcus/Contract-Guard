@@ -28,16 +28,23 @@ if not _ok():
     st.error(f"API not reachable at {API_URL}. Start it with `make api`.")
     st.stop()
 
-tab_review, tab_corpus, tab_ask = st.tabs(
-    ["Review a contract", "Corpus dashboard", "Ask the corpus"]
+tab_review, tab_redline, tab_corpus, tab_ask = st.tabs(
+    ["Review a contract", "Redline plan", "Corpus dashboard", "Ask the corpus"]
 )
 
+SAMPLE = """SERVICES AGREEMENT
+
+2. TERM
+This agreement shall automatically renew for successive one year terms unless cancelled with 5 days notice before renewal.
+
+7. TERMINATION
+Client may terminate this agreement at any time, for any reason, in its sole discretion.
+
+9. LIABILITY
+Vendor's liability shall not be capped or limited in any respect."""
+
 with tab_review:
-    text = st.text_area(
-        "Contract text",
-        "SERVICES AGREEMENT\n\n2. TERM\nThis agreement shall automatically renew for successive one year terms unless cancelled with 5 days notice before renewal.\n\n7. TERMINATION\nClient may terminate this agreement at any time, for any reason, in its sole discretion.\n\n9. LIABILITY\nVendor's liability shall not be capped or limited in any respect.",
-        height=200,
-    )
+    text = st.text_area("Contract text", SAMPLE, height=200)
     if st.button("Review", type="primary") and len(text) >= 50:
         r = httpx.post(f"{API_URL}/review", json={"text": text}, timeout=60)
         body = r.json()
@@ -54,6 +61,58 @@ with tab_review:
                 for o in c["obligations"]:
                     deadline = f" (within {o['deadline_days']} days)" if o["deadline_days"] else ""
                     st.caption(f"→ {o['party']} shall {o['action']}{deadline}")
+
+with tab_redline:
+    st.caption(
+        "Every proposal is re-scanned by the same rule library before it is offered, and the "
+        "document is re-scanned after each edit — so an edit that fixes one finding and creates "
+        "another shows up as a regression instead of a net-zero count."
+    )
+    rl_text = st.text_area("Contract text", SAMPLE, height=200, key="redline_text")
+    if st.button("Build redline plan", type="primary") and len(rl_text) >= 50:
+        rp = httpx.post(f"{API_URL}/redline", json={"text": rl_text}, timeout=120)
+        if rp.status_code != 200:
+            st.error(rp.json().get("detail", rp.text))
+        else:
+            plan = rp.json()
+            ledger = plan["ledger"]["summary"]
+            a, b, c, d = st.columns(4)
+            a.metric(
+                "Findings",
+                plan["n_findings_after"],
+                plan["n_findings_after"] - plan["n_findings_before"],
+            )
+            b.metric("Edits applied", ledger["n_edits"])
+            c.metric("Candidates refused", plan["n_candidates_rejected"])
+            d.metric("Regressions", ledger["n_regressions"])
+            if ledger["n_regressions"]:
+                st.warning(
+                    "An edit created a finding that was not there before: "
+                    + ", ".join(ledger["introduced_rules"])
+                )
+            for step in plan["steps"]:
+                r = step["redline"]
+                if r is None:
+                    st.markdown(f"**{step['order']}. {step['rule']}** — no automated redline")
+                    st.caption(step["blocked_reason"])
+                    continue
+                st.markdown(
+                    f"**{step['order']}. {step['rule']}** · `{r['edit']}` · [{r['citation']}]"
+                )
+                st.caption(r["rationale"])
+                if r["original"]:
+                    st.code(r["original"][:400], language=None)
+                st.code(r["replacement"][:400], language=None)
+                for rej in r["rejected"]:
+                    st.caption(
+                        f"passed over [{rej['citation']}] — it trips `{rej['tripped']}` itself"
+                    )
+            if plan["needs_review"]:
+                st.subheader("Left for a human")
+                for item in plan["needs_review"]:
+                    st.markdown(f"- **{item['rule']}** ({item['severity']}) — {item['reason']}")
+            with st.expander("Redlined contract"):
+                st.code(plan["redlined_text"], language=None)
 
 with tab_corpus:
     r = httpx.get(f"{API_URL}/corpus", timeout=120)

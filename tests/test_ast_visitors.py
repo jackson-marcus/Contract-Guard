@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from contractguard.ast.visitors import (
     ClauseNode,
     ComplianceVisitor,
@@ -14,7 +12,6 @@ from contractguard.ast.visitors import (
     RiskFlag,
     build_ast,
 )
-
 
 # ---------------------------------------------------------------------------
 # Sample clause nodes
@@ -48,7 +45,7 @@ GDPR_CLAUSE = ClauseNode(
     index=3,
     heading="DATA PROCESSING",
     text="This agreement constitutes a data processing agreement. The lawful basis for processing"
-         " is contractual necessity. Data subject rights shall be honored within 72 hours.",
+    " is contractual necessity. Data subject rights shall be honored within 72 hours.",
     clause_type="other",
     obligations=[],
 )

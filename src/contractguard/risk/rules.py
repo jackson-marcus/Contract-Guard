@@ -79,10 +79,15 @@ class RiskFinding:
     explanation: str
 
     def as_dict(self) -> dict:
-        return vars(self)
+        return dict(vars(self))
 
 
-def scan(clauses: list[Clause]) -> list[RiskFinding]:
+def scan_patterns(clauses: list[Clause]) -> list[RiskFinding]:
+    """Pattern-library pass only — no whole-document missing-clause checks.
+
+    Split out from :func:`scan` so a single candidate clause can be vetted in
+    isolation (the redline pass does this before proposing replacement text;
+    the missing-clause checks are meaningless against one clause)."""
     findings: list[RiskFinding] = []
     for clause in clauses:
         for rule_id, severity, pattern, why in _COMPILED:
@@ -99,7 +104,11 @@ def scan(clauses: list[Clause]) -> list[RiskFinding]:
                         explanation=why,
                     )
                 )
+    return findings
 
+
+def scan(clauses: list[Clause]) -> list[RiskFinding]:
+    findings = scan_patterns(clauses)
     present = {c.clause_type for c in clauses}
     for required in get_config()["risk"]["flag_missing_clauses"]:
         if required not in present:

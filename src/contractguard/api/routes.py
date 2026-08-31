@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from contractguard.clauses.segment import segment
 from contractguard.llm.factory import get_provider
+from contractguard.orchestrator.executor import RedlinePass
 from contractguard.rag.qa import ask
 from contractguard.risk.rules import scan
 from contractguard.settings import get_config, resolve_path
@@ -44,6 +45,44 @@ def review(request: ReviewRequest) -> dict:
         "findings": [f.as_dict() for f in findings],
         "disclaimer": DISCLAIMER,
     }
+
+
+class RedlineRequest(BaseModel):
+    text: str = Field(min_length=50, max_length=200_000)
+    apply: bool = True
+
+
+@router.post("/redline")
+def redline(request: RedlineRequest) -> dict:
+    """Propose replacement language for every finding, applied edit by edit.
+
+    Each proposal is vetted against the same pattern library before it is
+    offered, and the document is re-scanned after every edit so an edit that
+    resolves its own finding while creating another one is reported as a
+    regression rather than hidden in a net count. `apply=false` returns the
+    ordered plan without touching the text.
+    """
+    pipeline = RedlinePass()
+    if not request.apply:
+        steps, findings = pipeline.plan(request.text)
+        return {
+            "n_findings_before": len(findings),
+            "steps": [s.as_dict() for s in steps],
+            "needs_review": [
+                {
+                    "rule": s.rule,
+                    "severity": s.severity,
+                    "clause_heading": s.clause_heading,
+                    "reason": s.blocked_reason,
+                }
+                for s in steps
+                if s.redline is None
+            ],
+            "disclaimer": DISCLAIMER,
+        }
+    report = pipeline.run(request.text)
+    report["disclaimer"] = DISCLAIMER
+    return report
 
 
 @router.get("/corpus")
